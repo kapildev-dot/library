@@ -12,6 +12,9 @@ function initializeStorage() {
     if (!localStorage.getItem('isAdminLoggedIn')) {
         localStorage.setItem('isAdminLoggedIn', 'false');
     }
+    if (!localStorage.getItem('attendance')) {
+        localStorage.setItem('attendance', JSON.stringify({}));
+    }
 }
 
 // Get data from localStorage
@@ -36,7 +39,8 @@ function saveNews(news) {
 function loginAdmin() {
     const password = document.getElementById('adminPassword')?.value;
     const loginError = document.getElementById('loginError');
-    if (!password || !loginError) return; // Skip if elements not found
+    if (!password || !loginError) return;
+    
     if (password === ADMIN_PASSWORD) {
         localStorage.setItem('isAdminLoggedIn', 'true');
         window.location.href = 'admin.html';
@@ -55,9 +59,11 @@ function logoutAdmin() {
 // Fetch and display news
 function fetchNews() {
     const newsList = document.getElementById('newsList');
-    if (!newsList) return; // Skip if not on index.html
+    if (!newsList) return;
+    
     newsList.innerHTML = '';
     const news = getNews();
+    
     if (news.length === 0) {
         const li = document.createElement('li');
         li.textContent = 'No news updates available.';
@@ -68,6 +74,14 @@ function fetchNews() {
             li.textContent = `${item.date_posted} - ${item.content}`;
             newsList.appendChild(li);
         });
+        
+        // Calculate ticker animation duration based on content length
+        const contentWidth = newsList.scrollWidth;
+        const containerWidth = document.querySelector('.news-ticker-container').offsetWidth;
+        const duration = Math.max(30, contentWidth / 50);
+        
+        const ticker = document.querySelector('.news-ticker');
+        ticker.style.animation = `ticker ${duration}s linear infinite`;
     }
 }
 
@@ -75,10 +89,12 @@ function fetchNews() {
 function fetchUsers() {
     const userTable = document.getElementById('userTable')?.querySelector('tbody');
     const totalUsers = document.getElementById('totalUsers');
-    if (!userTable || !totalUsers) return; // Skip if not on admin.html
+    if (!userTable || !totalUsers) return;
+    
     userTable.innerHTML = '';
     const users = getUsers();
     totalUsers.textContent = users.length;
+    
     if (users.length === 0) {
         const row = userTable.insertRow();
         row.innerHTML = `<td colspan="6" style="text-align: center;">No students registered.</td>`;
@@ -110,7 +126,8 @@ function deleteUser(userId) {
 // Search Functionality
 function searchResources() {
     const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return; // Skip if not on index.html
+    if (!searchInput) return;
+    
     const searchValue = searchInput.value.toLowerCase();
     const sections = document.querySelectorAll('section');
     let found = false;
@@ -162,7 +179,6 @@ function handleNewsForm() {
             const formData = new FormData(this);
             const newsContent = formData.get('news_content').trim();
             
-            // Validate news content
             if (!newsContent) {
                 alert('Please enter news content!');
                 return;
@@ -197,288 +213,15 @@ function handleNewsForm() {
             successMsg.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
             document.body.appendChild(successMsg);
             
-            // Remove message after 3 seconds
             setTimeout(() => {
                 successMsg.style.opacity = '0';
                 setTimeout(() => document.body.removeChild(successMsg), 500);
             }, 3000);
 
-            // Refresh news display
             fetchNews();
-            
-            // Restart animation if it was stopped
-            const ticker = document.querySelector('.news-ticker');
-            if (ticker && news.length > 0) {
-                const contentWidth = document.getElementById('newsList').scrollWidth;
-                const containerWidth = document.querySelector('.news-ticker-container').offsetWidth;
-                const duration = Math.max(30, contentWidth / 50);
-                
-                ticker.style.animation = 'none';
-                // Trigger reflow
-                void ticker.offsetWidth;
-                ticker.style.animation = `ticker ${duration}s linear infinite`;
-            }
         });
     }
 }
-// Add data export/import functionality
-function exportData() {
-    const data = {
-        users: getUsers(),
-        news: getNews(),
-        attendance: JSON.parse(localStorage.getItem('attendance')) || {}
-    };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `library-data-${new Date().toISOString()}.json`;
-    a.click();
-}
-
-function importData(event) {
-    const file = event.target.files[0];
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const data = JSON.parse(e.target.result);
-        localStorage.setItem('users', JSON.stringify(data.users));
-        localStorage.setItem('news', JSON.stringify(data.news));
-        localStorage.setItem('attendance', JSON.stringify(data.attendance));
-        alert('Data imported successfully!');
-        window.location.reload();
-    };
-    reader.readAsText(file);
-}
-// Initialize page
-document.addEventListener('DOMContentLoaded', () => {
-    initializeStorage();
-    fetchNews();
-    fetchUsers();
-    handleContactForm();
-    handleNewsForm();
-
-    // Check if admin is logged in for admin.html
-    if (window.location.pathname.includes('admin.html') && localStorage.getItem('isAdminLoggedIn') !== 'true') {
-        window.location.href = 'index.html';
-    }
-
-    // Show admin login section when Admin Panel link is clicked
-    const adminLink = document.getElementById('adminLink');
-    if (adminLink) {
-        adminLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.querySelectorAll('section').forEach(section => {
-                section.style.display = section.id === 'admin-login' ? 'block' : 'none';
-            });
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-    }
-    // Add to initializeStorage()
-if (!localStorage.getItem('attendance')) {
-    localStorage.setItem('attendance', JSON.stringify({}));
-}
-
-// New attendance functions
-function loadAttendance() {
-    const date = document.getElementById('attendanceDate').value || new Date().toISOString().split('T')[0];
-    const attendanceTable = document.getElementById('attendanceTable')?.querySelector('tbody');
-    if (!attendanceTable) return;
-    
-    attendanceTable.innerHTML = '';
-    const users = getUsers();
-    const allAttendance = JSON.parse(localStorage.getItem('attendance'));
-    const dateAttendance = allAttendance[date] || {};
-    
-    users.forEach(user => {
-        const row = attendanceTable.insertRow();
-        const userAttendance = dateAttendance[user.id] || { present: false, timeIn: '', timeOut: '' };
-        
-        row.innerHTML = `
-            <td>${user.name}</td>
-            <td><input type="checkbox" ${userAttendance.present ? 'checked' : ''} 
-                 onchange="updateAttendance(${user.id}, 'present', this.checked, '${date}')"></td>
-            <td><input type="time" value="${userAttendance.timeIn || ''}" 
-                 onchange="updateAttendance(${user.id}, 'timeIn', this.value, '${date}')"></td>
-            <td><input type="time" value="${userAttendance.timeOut || ''}" 
-                 onchange="updateAttendance(${user.id}, 'timeOut', this.value, '${date}')"></td>
-        `;
-    });
-}
-
-function updateAttendance(userId, field, value, date) {
-    date = date || document.getElementById('attendanceDate').value || new Date().toISOString().split('T')[0];
-    const allAttendance = JSON.parse(localStorage.getItem('attendance'));
-    
-    if (!allAttendance[date]) {
-        allAttendance[date] = {};
-    }
-    
-    if (!allAttendance[date][userId]) {
-        allAttendance[date][userId] = { present: false, timeIn: '', timeOut: '' };
-    }
-    
-    allAttendance[date][userId][field] = value;
-    localStorage.setItem('attendance', JSON.stringify(allAttendance));
-}
-
-function markAllPresent() {
-    const date = document.getElementById('attendanceDate').value || new Date().toISOString().split('T')[0];
-    const users = getUsers();
-    const allAttendance = JSON.parse(localStorage.getItem('attendance'));
-    
-    if (!allAttendance[date]) {
-        allAttendance[date] = {};
-    }
-    
-    users.forEach(user => {
-        if (!allAttendance[date][user.id]) {
-            allAttendance[date][user.id] = { present: true, timeIn: '09:00', timeOut: '17:00' };
-        } else {
-            allAttendance[date][user.id].present = true;
-        }
-    });
-    
-    localStorage.setItem('attendance', JSON.stringify(allAttendance));
-    loadAttendance();
-}
-
-// Add to DOMContentLoaded
-document.getElementById('attendanceDate').value = new Date().toISOString().split('T')[0];
-
-    // Smooth scrolling for navigation links (only for index.html)
-    document.querySelectorAll('nav ul li a:not(.logout)').forEach(anchor => {
-        if (anchor.getAttribute('href').startsWith('#')) {
-            anchor.addEventListener('click', function(e) {
-                e.preventDefault();
-                const targetId = this.getAttribute('href').substring(1);
-                const targetElement = document.getElementById(targetId);
-                if (targetElement) {
-                    window.scrollTo({
-                        top: targetElement.offsetTop - 80,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        }
-    });
-});
-// Add these functions to your existing script.js
-
-function loadAttendance() {
-    const dateInput = document.getElementById('attendanceDate');
-    const date = dateInput.value;
-    const attendanceTable = document.getElementById('attendanceTable').querySelector('tbody');
-    
-    // Clear existing rows
-    attendanceTable.innerHTML = '';
-    
-    // Get all registered users
-    const users = getUsers();
-    
-    // Get attendance data for selected date
-    const allAttendance = JSON.parse(localStorage.getItem('attendance')) || {};
-    const dateAttendance = allAttendance[date] || {};
-    
-    // Create a row for each user
-    users.forEach(user => {
-        const row = attendanceTable.insertRow();
-        
-        // Get this user's attendance for the selected date
-        const userAttendance = dateAttendance[user.id] || {
-            present: false,
-            timeIn: '09:00',
-            timeOut: '17:00'
-        };
-        
-        // Insert cells with attendance controls
-        row.innerHTML = `
-            <td>${user.name}</td>
-            <td>
-                <input type="checkbox" 
-                       ${userAttendance.present ? 'checked' : ''}
-                       onchange="updateUserAttendance(${user.id}, 'present', this.checked)">
-            </td>
-            <td>
-                <input type="time" 
-                       value="${userAttendance.timeIn}"
-                       onchange="updateUserAttendance(${user.id}, 'timeIn', this.value)">
-            </td>
-            <td>
-                <input type="time" 
-                       value="${userAttendance.timeOut}"
-                       onchange="updateUserAttendance(${user.id}, 'timeOut', this.value)">
-            </td>
-        `;
-    });
-}
-
-function updateUserAttendance(userId, field, value) {
-    const date = document.getElementById('attendanceDate').value;
-    let allAttendance = JSON.parse(localStorage.getItem('attendance')) || {};
-    
-    // Initialize date if not exists
-    if (!allAttendance[date]) {
-        allAttendance[date] = {};
-    }
-    
-    // Initialize user attendance if not exists
-    if (!allAttendance[date][userId]) {
-        allAttendance[date][userId] = {
-            present: false,
-            timeIn: '09:00',
-            timeOut: '17:00'
-        };
-    }
-    
-    // Update the specific field
-    allAttendance[date][userId][field] = value;
-    
-    // Save back to localStorage
-    localStorage.setItem('attendance', JSON.stringify(allAttendance));
-}
-
-function markAllPresent() {
-    const date = document.getElementById('attendanceDate').value;
-    const users = getUsers();
-    let allAttendance = JSON.parse(localStorage.getItem('attendance')) || {};
-    
-    // Initialize date if not exists
-    if (!allAttendance[date]) {
-        allAttendance[date] = {};
-    }
-    
-    // Mark all users as present
-    users.forEach(user => {
-        if (!allAttendance[date][user.id]) {
-            allAttendance[date][user.id] = {
-                present: true,
-                timeIn: '09:00',
-                timeOut: '17:00'
-            };
-        } else {
-            allAttendance[date][user.id].present = true;
-        }
-    });
-    
-    // Save and refresh
-    localStorage.setItem('attendance', JSON.stringify(allAttendance));
-    loadAttendance();
-}
-
-// Initialize the attendance system when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    // ... existing code ...
-    
-    // Set default date to today if not already set
-    if (!document.getElementById('attendanceDate').value) {
-        const today = new Date();
-        document.getElementById('attendanceDate').value = today.toISOString().split('T')[0];
-    }
-    
-    // Load initial attendance data
-    loadAttendance();
-});
-// Add these functions to your existing script.js
 
 // Format date as DD-MMM-YYYY (e.g., 17-Jul-2025)
 function formatDisplayDate(dateString) {
@@ -488,6 +231,15 @@ function formatDisplayDate(dateString) {
     const month = months[date.getMonth()];
     const year = date.getFullYear();
     return `${day}-${month}-${year}`;
+}
+
+// Convert 24h time to 12h format (09:00 → 09:00 AM)
+function convertTo12Hour(time24h) {
+    if (!time24h) return '';
+    const [hours, minutes] = time24h.split(':');
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes} ${period}`;
 }
 
 // Load attendance for selected date
@@ -520,7 +272,6 @@ function loadAttendance() {
             timeOut: '18:00'
         };
         
-        // Convert 24h time to 12h format for display
         const timeIn12h = convertTo12Hour(userAttendance.timeIn);
         const timeOut12h = convertTo12Hour(userAttendance.timeOut);
         
@@ -555,15 +306,6 @@ function loadAttendance() {
             timeDisplay.textContent = convertTo12Hour(this.value);
         });
     });
-}
-
-// Convert 24h time to 12h format (09:00 → 09:00 AM)
-function convertTo12Hour(time24h) {
-    if (!time24h) return '';
-    const [hours, minutes] = time24h.split(':');
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours % 12 || 12;
-    return `${hours12}:${minutes} ${period}`;
 }
 
 // Mark all students as present
@@ -604,16 +346,387 @@ function saveAttendance() {
     alert('Attendance saved successfully!');
 }
 
-// Initialize the page
+// Initialize page
 document.addEventListener('DOMContentLoaded', () => {
-    // ... existing initialization code ...
-    
+    initializeStorage();
+    fetchNews();
+    fetchUsers();
+    handleContactForm();
+    handleNewsForm();
+
+    // Check if admin is logged in for admin.html
+    if (window.location.pathname.includes('admin.html') && localStorage.getItem('isAdminLoggedIn') !== 'true') {
+        window.location.href = 'index.html';
+    }
+
+    // Show admin login section when Admin Panel link is clicked
+    const adminLink = document.getElementById('adminLink');
+    if (adminLink) {
+        adminLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.querySelectorAll('section').forEach(section => {
+                section.style.display = section.id === 'admin-login' ? 'block' : 'none';
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    }
+
     // Set default date to today
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    document.getElementById('attendanceDate').value = todayStr;
-    document.getElementById('currentDateDisplay').textContent = formatDisplayDate(todayStr);
-    
-    // Load today's attendance
-    loadAttendance();
+    if (document.getElementById('attendanceDate')) {
+        document.getElementById('attendanceDate').value = todayStr;
+        document.getElementById('currentDateDisplay').textContent = formatDisplayDate(todayStr);
+        loadAttendance();
+    }
+
+    // Mobile menu toggle
+    const hamburger = document.querySelector('.hamburger');
+    const navMenu = document.querySelector('nav ul');
+    if (hamburger && navMenu) {
+        hamburger.addEventListener('click', () => {
+            navMenu.classList.toggle('show');
+        });
+    }
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('nav ul li a:not(.logout)').forEach(anchor => {
+        if (anchor.getAttribute('href').startsWith('#')) {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                }
+                if (navMenu.classList.contains('show')) {
+                    navMenu.classList.remove('show');
+                }
+            });
+        }
+    });
 });
+// Add to initializeStorage()
+if (!localStorage.getItem('fees')) {
+    localStorage.setItem('fees', JSON.stringify([]));
+}
+
+// Add to get/save functions
+function getFees() {
+    return JSON.parse(localStorage.getItem('fees')) || [];
+}
+
+function saveFees(fees) {
+    localStorage.setItem('fees', JSON.stringify(fees));
+}
+
+// Add deleteNews function
+function deleteNews(newsId) {
+    if (confirm('Are you sure you want to delete this news item?')) {
+        let news = getNews();
+        news = news.filter(item => item.id !== newsId);
+        saveNews(news);
+        fetchNews();
+        fetchAdminNews(); // Refresh admin news table
+    }
+}
+
+// Add fetchAdminNews function
+function fetchAdminNews() {
+    const newsTable = document.getElementById('newsTable')?.querySelector('tbody');
+    if (!newsTable) return;
+    
+    newsTable.innerHTML = '';
+    const news = getNews();
+    
+    if (news.length === 0) {
+        const row = newsTable.insertRow();
+        row.innerHTML = `<td colspan="3" style="text-align: center;">No news updates available.</td>`;
+    } else {
+        news.forEach(item => {
+            const row = newsTable.insertRow();
+            row.innerHTML = `
+                <td>${item.date_posted}</td>
+                <td>${item.content}</td>
+                <td><a href="#" onclick="deleteNews(${item.id})">Delete</a></td>
+            `;
+        });
+    }
+}
+
+// Add fetchFees function
+function fetchFees() {
+    const feeTable = document.getElementById('feeTable')?.querySelector('tbody');
+    const feeForm = document.getElementById('feeForm');
+    const studentSelect = feeForm?.querySelector('select[name="student_id"]');
+    
+    if (!feeTable || !feeForm || !studentSelect) return;
+    
+    feeTable.innerHTML = '';
+    const fees = getFees();
+    const users = getUsers();
+    
+    // Populate student dropdown
+    studentSelect.innerHTML = '<option value="">Select Student</option>';
+    users.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.id;
+        option.textContent = `${user.name} (${user.phone})`;
+        studentSelect.appendChild(option);
+    });
+    
+    if (fees.length === 0) {
+        const row = feeTable.insertRow();
+        row.innerHTML = `<td colspan="4" style="text-align: center;">No fee records available.</td>`;
+    } else {
+        fees.forEach(fee => {
+            const user = users.find(u => u.id === fee.student_id);
+            const row = feeTable.insertRow();
+            row.innerHTML = `
+                <td>${user ? user.name : 'Unknown Student'}</td>
+                <td>₹${fee.amount}</td>
+                <td>${fee.payment_date}</td>
+                <td><a href="#" onclick="deleteFee(${fee.id})">Delete</a></td>
+            `;
+        });
+    }
+}
+
+// Add deleteFee function
+function deleteFee(feeId) {
+    if (confirm('Are you sure you want to delete this fee record?')) {
+        let fees = getFees();
+        fees = fees.filter(fee => fee.id !== feeId);
+        saveFees(fees);
+        fetchFees();
+    }
+}
+
+// Add handleFeeForm function
+function handleFeeForm() {
+    const feeForm = document.getElementById('feeForm');
+    if (feeForm) {
+        feeForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const fees = getFees();
+            const fee = {
+                id: fees.length + 1,
+                student_id: parseInt(formData.get('student_id')),
+                amount: parseInt(formData.get('amount')),
+                payment_date: formData.get('payment_date')
+            };
+            fees.push(fee);
+            saveFees(fees);
+            this.reset();
+            fetchFees();
+            
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.textContent = 'Fee added successfully!';
+            successMsg.style.position = 'fixed';
+            successMsg.style.bottom = '20px';
+            successMsg.style.right = '20px';
+            successMsg.style.padding = '10px 20px';
+            successMsg.style.backgroundColor = '#10b981';
+            successMsg.style.color = 'white';
+            successMsg.style.borderRadius = '5px';
+            successMsg.style.zIndex = '1000';
+            successMsg.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            document.body.appendChild(successMsg);
+            
+            setTimeout(() => {
+                successMsg.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(successMsg), 500);
+            }, 3000);
+        });
+    }
+}
+
+// Update DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    initializeStorage();
+    fetchNews();
+    fetchAdminNews(); // Add this line
+    fetchUsers();
+    fetchFees(); // Add this line
+    handleContactForm();
+    handleNewsForm();
+    handleFeeForm(); // Add this line
+
+    // ... rest of the existing code ...
+});
+// Add this function for mobile menu toggle
+function toggleMenu() {
+    const navMenu = document.querySelector('.nav-menu');
+    navMenu.classList.toggle('active');
+}
+
+// Close menu when clicking on links
+document.querySelectorAll('.nav-menu a').forEach(link => {
+    link.addEventListener('click', () => {
+        const navMenu = document.querySelector('.nav-menu');
+        navMenu.classList.remove('active');
+    });
+});
+
+// Update DOMContentLoaded to include mobile menu
+document.addEventListener('DOMContentLoaded', () => {
+    // ... existing initialization code ...
+
+    // Mobile menu toggle
+    const hamburger = document.querySelector('.hamburger');
+    if (hamburger) {
+        hamburger.addEventListener('click', toggleMenu);
+    }
+});
+// Add these functions to script.js
+
+// Update fetchUsers to include fee status
+function fetchUsers() {
+    const userTable = document.getElementById('userTable')?.querySelector('tbody');
+    const totalUsers = document.getElementById('totalUsers');
+    if (!userTable || !totalUsers) return;
+    
+    userTable.innerHTML = '';
+    const users = getUsers();
+    const fees = getFees();
+    totalUsers.textContent = users.length;
+    
+    if (users.length === 0) {
+        const row = userTable.insertRow();
+        row.innerHTML = `<td colspan="7" style="text-align: center;">No students registered.</td>`;
+    } else {
+        users.forEach(user => {
+            const row = userTable.insertRow();
+            const userFees = fees.filter(fee => fee.student_id === user.id);
+            const hasPaid = userFees.length > 0;
+            const totalPaid = userFees.reduce((sum, fee) => sum + fee.amount, 0);
+            
+            row.innerHTML = `
+                <td>${user.name}</td>
+                <td>${user.email}</td>
+                <td>${user.phone}</td>
+                <td>${user.address}</td>
+                <td>${user.registration_date}</td>
+                <td class="fee-status ${hasPaid ? 'paid' : 'unpaid'}">
+                    ${hasPaid ? `Paid (₹${totalPaid})` : 'Unpaid'}
+                </td>
+                <td><a href="#" onclick="deleteUser(${user.id})">Delete</a></td>
+            `;
+        });
+    }
+}
+
+// Print fee report function
+function printFeeReport() {
+    const users = getUsers();
+    const fees = getFees();
+    
+    // Create a printable HTML content
+    let printContent = `
+        <html>
+            <head>
+                <title>Student Fee Report</title>
+                <style>
+                    body { font-family: Arial, sans-serif; }
+                    h1 { text-align: center; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                    .paid { color: green; }
+                    .unpaid { color: red; }
+                    .print-date { text-align: right; margin-bottom: 20px; }
+                </style>
+            </head>
+            <body>
+                <h1>Student Fee Report</h1>
+                <div class="print-date">Printed on: ${new Date().toLocaleDateString()}</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Total Paid</th>
+                            <th>Status</th>
+                            <th>Last Payment Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    users.forEach(user => {
+        const userFees = fees.filter(fee => fee.student_id === user.id);
+        const hasPaid = userFees.length > 0;
+        const totalPaid = userFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const lastPayment = userFees.length > 0 
+            ? userFees[userFees.length - 1].payment_date 
+            : 'N/A';
+        
+        printContent += `
+            <tr>
+                <td>${user.id}</td>
+                <td>${user.name}</td>
+                <td>${user.phone}</td>
+                <td>${hasPaid ? '₹' + totalPaid : '₹0'}</td>
+                <td class="${hasPaid ? 'paid' : 'unpaid'}">
+                    ${hasPaid ? 'Paid' : 'Unpaid'}
+                </td>
+                <td>${lastPayment}</td>
+            </tr>
+        `;
+    });
+    
+    printContent += `
+                    </tbody>
+                </table>
+                <div style="margin-top: 30px; text-align: right;">
+                    <p>Signature: _________________________</p>
+                </div>
+            </body>
+        </html>
+    `;
+    
+    // Open print window
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 500);
+}
+
+// Export fee data to CSV
+function exportFeeData() {
+    const users = getUsers();
+    const fees = getFees();
+    
+    let csvContent = "Student ID,Name,Phone,Total Paid,Status,Last Payment Date\n";
+    
+    users.forEach(user => {
+        const userFees = fees.filter(fee => fee.student_id === user.id);
+        const hasPaid = userFees.length > 0;
+        const totalPaid = userFees.reduce((sum, fee) => sum + fee.amount, 0);
+        const lastPayment = userFees.length > 0 
+            ? userFees[userFees.length - 1].payment_date 
+            : 'N/A';
+            
+        csvContent += `${user.id},"${user.name}",${user.phone},${totalPaid},${hasPaid ? 'Paid' : 'Unpaid'},${lastPayment}\n`;
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `fee_report_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
